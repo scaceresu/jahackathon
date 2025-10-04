@@ -14,17 +14,18 @@ class PlayerMenu:
         texto_puntos = self.fuente.render(f"Puntos: {self.jugador.coin}", True, COLOR_SCORE)
         pantalla.blit(texto_puntos, (20, 20))
 
-        # --- Жизни (маленькие квадратики) ---
+        # --- Lifes ---
         for i in range(self.jugador.vidas):
             rect_vida = pygame.Rect(240 + i * (TILE + 5), 30, TILE, TILE)
             pygame.draw.rect(pantalla, COLOR_VIDA, rect_vida)
         x_inventario = 20
-        y_inventario = 50  # под монетами и жизнями
+        y_inventario = 50
         for item, cantidad in self.jugador.inventory.items():
             if cantidad > 0:
                 texto_item = self.fuente.render(f"{item.capitalize()}: {cantidad}", True, (255, 255, 255))
                 pantalla.blit(texto_item, (x_inventario, y_inventario))
                 y_inventario += texto_item.get_height() + 5
+                
         # # --- Буст (полоса) ---
         # boost_ancho = 80  # ширина полосы буста
         # boost_alto = 16

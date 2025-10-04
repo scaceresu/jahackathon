@@ -48,7 +48,7 @@ class Player(pygame.sprite.Sprite):
             colisiones = pygame.sprite.spritecollide(self, enemigos, False)
             for enemigo in colisiones:
                 self.vidas -= 1
-                self.rect.topleft = (100, 100)  # стартовая позиция
+                self.rect.topleft = (100, 100)  # Start Position
                 break  
 
         if self.vidas <= 0:

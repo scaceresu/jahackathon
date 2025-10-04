@@ -26,7 +26,7 @@ def cargar_mapa_tmj(archivo):
                 for x in range(width):
                     tile_id = tile_data[y * width + x]
                     if tile_id != 0:
-                        # Генерируем цвет для тайла (можно заменить логику)
+                        # generate color for map
                         color = (
                             (tile_id * 50) % 255,
                             (tile_id * 80) % 255,

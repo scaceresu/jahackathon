@@ -5,7 +5,7 @@ from enemy import Enemy
 from playermenu import PlayerMenu
 from savezone import SaveZone
 from coin import Coin
-from food import Food
+from food import FoodZone
 from deliveryzone import DeliveryZone
 from tile import cargar_mapa_tmj
 from settings import FPS, COLOR_FONDO
@@ -37,36 +37,36 @@ def jugar(pantalla, archivo_tmj):
     
     muros = pygame.sprite.Group()
     todos = pygame.sprite.Group(jugador,*enemigos)
-    lomito = Food(100, 200, 20, 20, "lomito", color=(255,200,0))
-    empanada = Food(300, 150, 20, 20, "empanada", color=(200,150,50))
+    lomito = FoodZone(100, 200, 75, 75, "lomito", color=(255,200,0))
+    empanada = FoodZone(300, 150, 75, 75, "empanada", color=(200,150,50))
     lomito_group=pygame.sprite.Group(lomito)
     empanada_group=pygame.sprite.Group(empanada)
     delivery_zone_group=pygame.sprite.Group(delivery_zone)
-    # --- КНОПКА "SALIR" ---
+    # --- button "SALIR" ---
     boton_salir = pygame.Rect(650, 20, 120, 40)
 
-    # --- ЦИКЛ ИГРЫ ---
+    # --- cycle пфьу ---
     corriendo = True
     while corriendo:
-        # --- СОБЫТИЯ ---
+        # --- Actions ---
         for evento in pygame.event.get():
             if evento.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
             elif evento.type == pygame.KEYDOWN and evento.key == pygame.K_ESCAPE:
-                return  # выход в меню
+                return  # exit to menu
             elif evento.type == pygame.MOUSEBUTTONDOWN and evento.button == 1:
                 if boton_salir.collidepoint(evento.pos):
-                    return  # выход в меню
+                    return  #exit to menu
 
-        # --- ЛОГИКА ---
+        # --- LOgic ---
         teclas = pygame.key.get_pressed()
         jugador.update(teclas, muros,enemigos)
         for enemigo in enemigos:
             enemigo.update(jugador)
-        # --- ОТРИСОВКА ---
+        # --- Paint ---
         pantalla.fill(COLOR_FONDO)
-        # Отрисовка карты (тайлов)
+        #  Paint (map)
         tiles_group.draw(pantalla)
         zones_group.draw(pantalla)
         zone_coin.draw(pantalla)
@@ -79,10 +79,10 @@ def jugar(pantalla, archivo_tmj):
         empanada_group.update(jugador)
         lomito_group.draw(pantalla)
         lomito_group.update(jugador)
-        # Отрисовка игрока
+        # Paint player
         todos.draw(pantalla)
 
-        # --- КНОПКА ВЫХОДА ---
+        # --- Button salir ---
         pygame.draw.rect(pantalla, (255, 80, 80), boton_salir)
         texto = fuente.render("Salir", True, (255, 255, 255))
         pantalla.blit(texto, texto.get_rect(center=boton_salir.center))
