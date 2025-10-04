@@ -1,5 +1,7 @@
 import pygame
-from mapa import mapa1, mapa2
+import pytmx
+mapa1 = r"src/maps/mapa1.json"
+mapa2 = "maps/mapa2.tmj"
 from menu import menu
 from game import jugar
 from settings import ANCHO_PANTALLA, ALTO_PANTALLA
