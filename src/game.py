@@ -12,17 +12,21 @@ def jugar(pantalla, archivo_tmj):
 
 
     jugador = Player(100, 100)
-    enemy = Enemy(200, 200, horizontal=True, distancia=128, anim_folder="assets/imagenes/cargreen", frame_delay=0.15)
-    enemy1 = Enemy(400, 400, horizontal=True, distancia=64, anim_folder="assets/imagenes/cargreen", frame_delay=0.15)
-    enemy2 = Enemy(600, 600, horizontal=False, distancia=64, anim_folder="assets/imagenes/cargreen", frame_delay=0.15)
-
+    enemy = Enemy(x=600,y=600,horizontal=True, distancia=128, anim_folder="assets/imagenes/cargreen", frame_delay=0.15,aggro_radius=350)
+    enemy1 = Enemy(x=400,y=400 ,horizontal=True, distancia=64, anim_folder="assets/imagenes/cargreen", frame_delay=0.15,aggro_radius=350)
+    enemy2 = Enemy(x=600,y=600 ,horizontal=False, distancia=64, anim_folder="assets/imagenes/cargreen", frame_delay=0.15,aggro_radius=350)
+    enemigos = pygame.sprite.Group(
+        enemy,
+        enemy1,
+        enemy2
+    )
     menu_hud = PlayerMenu(jugador)
     tiles_group, tile_w, tile_h = cargar_mapa_tmj(archivo_tmj)
     for tile in tiles_group:
         tile.rect.y += 80
 
     muros = pygame.sprite.Group()
-    todos = pygame.sprite.Group(jugador,enemy,enemy1,enemy2)
+    todos = pygame.sprite.Group(jugador,*enemigos)
 
     # --- КНОПКА "SALIR" ---
     boton_salir = pygame.Rect(650, 20, 120, 40)
@@ -43,10 +47,9 @@ def jugar(pantalla, archivo_tmj):
 
         # --- ЛОГИКА ---
         teclas = pygame.key.get_pressed()
-        jugador.update(teclas, muros)
-        enemy.update()
-        enemy1.update()
-        enemy2.update()
+        jugador.update(teclas, muros,enemigos)
+        for enemigo in enemigos:
+            enemigo.update(jugador)
         # --- ОТРИСОВКА ---
         pantalla.fill(COLOR_FONDO)
 
