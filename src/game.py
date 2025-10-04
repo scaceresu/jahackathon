@@ -3,6 +3,10 @@ import sys
 from player import Player
 from enemy import Enemy
 from playermenu import PlayerMenu
+from savezone import SaveZone
+from coin import Coin
+from food import Food
+from deliveryzone import DeliveryZone
 from tile import cargar_mapa_tmj
 from settings import FPS, COLOR_FONDO
 
@@ -24,10 +28,20 @@ def jugar(pantalla, archivo_tmj):
     tiles_group, tile_w, tile_h = cargar_mapa_tmj(archivo_tmj)
     for tile in tiles_group:
         tile.rect.y += 80
-
+        
+    save_zone = SaveZone(500, 400, 100, 100)
+    delivery_zone = DeliveryZone(10,10,100,100)
+    coin = Coin(700, 400, 20, 20)
+    zone_coin=pygame.sprite.Group(coin)
+    zones_group = pygame.sprite.Group(save_zone)
+    
     muros = pygame.sprite.Group()
     todos = pygame.sprite.Group(jugador,*enemigos)
-
+    lomito = Food(100, 200, 20, 20, "lomito", color=(255,200,0))
+    empanada = Food(300, 150, 20, 20, "empanada", color=(200,150,50))
+    lomito_group=pygame.sprite.Group(lomito)
+    empanada_group=pygame.sprite.Group(empanada)
+    delivery_zone_group=pygame.sprite.Group(delivery_zone)
     # --- КНОПКА "SALIR" ---
     boton_salir = pygame.Rect(650, 20, 120, 40)
 
@@ -52,10 +66,19 @@ def jugar(pantalla, archivo_tmj):
             enemigo.update(jugador)
         # --- ОТРИСОВКА ---
         pantalla.fill(COLOR_FONDO)
-
         # Отрисовка карты (тайлов)
         tiles_group.draw(pantalla)
-
+        zones_group.draw(pantalla)
+        zone_coin.draw(pantalla)
+        zone_coin.update(jugador)
+        
+        delivery_zone_group.draw(pantalla)
+        delivery_zone_group.update(jugador)
+        
+        empanada_group.draw(pantalla)
+        empanada_group.update(jugador)
+        lomito_group.draw(pantalla)
+        lomito_group.update(jugador)
         # Отрисовка игрока
         todos.draw(pantalla)
 

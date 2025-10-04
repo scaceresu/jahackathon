@@ -8,8 +8,12 @@ class Player(pygame.sprite.Sprite):
         self.image.fill((255, 0, 0))
         self.rect = self.image.get_rect(topleft=(x, y))
         self.velocidad = 5
-        self.scores = 0
+        self.coin = 0
         self.vidas = 3
+        self.inventory = {
+            "empanada": 0,
+            "lomito": 0
+        }
 
     def update(self, teclas, muros, enemigos=None):
         dx, dy = 0, 0
@@ -51,3 +55,8 @@ class Player(pygame.sprite.Sprite):
             print("Game Over")
             exit()
 
+    def add_item(self, item_name, amount=1):
+        if item_name in self.inventory:
+            self.inventory[item_name] += amount
+        else:
+            self.inventory[item_name] = amount
