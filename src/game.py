@@ -63,7 +63,10 @@ def jugar(pantalla, archivo_csv):
 
     # Zonas y grupos
     save_zone = SaveZone(500, 400, 100, 100)
-    delivery_zone = DeliveryZone(10, 10, 100, 100)
+    delivery_zone = DeliveryZone(0, 210, 64, 64)
+    delivery_zone1 = DeliveryZone(384, 384, 64, 64)
+    delivery_zone2 = DeliveryZone(640, 160, 64, 64)
+    delivery_zone3 = DeliveryZone(1022, 260, 64, 64)
     coin = Coin(700, 400, 20, 20)
     agujeros = pygame.sprite.Group()
     agujeros.add(Agujero(100, 150))
@@ -73,11 +76,11 @@ def jugar(pantalla, archivo_csv):
     zones_group = pygame.sprite.Group(save_zone)
 
     todos = pygame.sprite.Group(jugador, *enemigos)
-    lomito = FoodZone(100, 200, 75, 75, "lomito", color=(255,200,0))
-    empanada = FoodZone(300, 150, 75, 75, "empanada", color=(200,150,50))
+    lomito = FoodZone(866, 575, 75, 75, "lomito", color=(200,200,0,100))
+    # empanada = FoodZone(300, 150, 75, 75, "empanada", color=(200,150,50,100))
     lomito_group = pygame.sprite.Group(lomito)
-    empanada_group = pygame.sprite.Group(empanada)
-    delivery_zone_group = pygame.sprite.Group(delivery_zone)
+    # empanada_group = pygame.sprite.Group(empanada)
+    delivery_zone_group = pygame.sprite.Group(delivery_zone,delivery_zone1,delivery_zone2,delivery_zone3)
 
 
 
@@ -93,7 +96,15 @@ def jugar(pantalla, archivo_csv):
         teclas = pygame.key.get_pressed()
 
         # --- Actualizaciones ---
-        jugador.update(teclas, mapa, muros_rects=muros, enemigos=enemigos, agujeros=agujeros)
+        jugador.update(
+            teclas, 
+            mapa, 
+            muros_rects=muros, 
+            enemigos=enemigos, 
+            agujeros=agujeros, 
+            delivery_zones=delivery_zone_group,
+            food_zones=lomito_group
+        )
 
         for enemigo in enemigos:
             enemigo.update(jugador=jugador, mapa=mapa)
@@ -110,12 +121,12 @@ def jugar(pantalla, archivo_csv):
         zones_group.draw(pantalla)
         zone_coin.draw(pantalla)
         zone_coin.update(jugador)
-
         delivery_zone_group.draw(pantalla)
         delivery_zone_group.update(jugador)
 
-        empanada_group.draw(pantalla)
-        empanada_group.update(jugador)
+
+        # empanada_group.draw(pantalla)
+        # empanada_group.update(jugador)
 
         lomito_group.draw(pantalla)
         lomito_group.update(jugador)
