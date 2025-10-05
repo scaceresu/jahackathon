@@ -15,8 +15,11 @@ class Player(pygame.sprite.Sprite):
         FRAME_W, FRAME_H = 44, 44
         FRAMES_COUNT = 4
 
-        # Tamaño en pantalla y colisión deseado (coinciden)
-        TARGET_W, TARGET_H = 24, 24  # 16x16
+        # Tamaño visual de la imagen (mantener proporción original)
+        TARGET_W, TARGET_H = 24, 24
+        
+        # Tamaño del área de colisión (más pequeña para mejor jugabilidad)
+        COLLISION_W, COLLISION_H = 12, 24
 
         base = os.path.join("assets", "imagenes", "player")
 
@@ -56,10 +59,10 @@ class Player(pygame.sprite.Sprite):
         self.frame_delay = 0.12
         self.last_frame_time = pygame.time.get_ticks() / 1000.0
 
-        # imagen visible (coincide con rect de colisión)
+        # imagen visible (mantiene tamaño original 24x24)
         self.image = self.frames["idle"][0]
-        # rect de colisión (uso TARGET_W x TARGET_H)
-        self.rect = pygame.Rect(x, y, TARGET_W, TARGET_H)
+        # rect de colisión (área más pequeña 12x24 para mejor jugabilidad)
+        self.rect = pygame.Rect(x, y, COLLISION_W, COLLISION_H)
 
         # atributos de juego
         self.velocidad = 3

@@ -62,13 +62,13 @@ def spawn_on_path(mapa, sprite_width, sprite_height, max_attempts=2000, avoid_po
     raise ValueError("No se encontró posición en camino tras many attempts")
 
 
-def jugar(pantalla, archivo_csv):
+def jugar(pantalla, archivo_csv,fondo_path):
     reloj = pygame.time.Clock()
     fuente = pygame.font.SysFont(None, 36)
 
     # --- Cargar imagen de fondo (una vez) ---
     base_dir = os.path.dirname(__file__)
-    fondo_path = os.path.join(base_dir, "maps", "fondo.png")
+    fondo_path = os.path.join(base_dir, "maps", fondo_path)
     if os.path.exists(fondo_path):
         fondo_img = pygame.image.load(fondo_path).convert()
         screen_w, screen_h = pantalla.get_size()
@@ -94,6 +94,7 @@ def jugar(pantalla, archivo_csv):
     ex, ey = spawn_on_path(mapa, enemy_w, enemy_h, avoid_positions=[(px, py)], min_distance=128)
     enemy = Enemy(ex, ey, horizontal=True, distancia=128,
                   anim_folder="assets/imagenes/enemy", frame_delay=0.15, aggro_radius=350)
+    
 
     enemigos = pygame.sprite.Group(enemy)
 
