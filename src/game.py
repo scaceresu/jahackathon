@@ -12,7 +12,11 @@ from coin import Coin
 from food import FoodZone
 from deliveryzone import DeliveryZone
 # Nuevo: funciones del módulo tilemap (cargar CSV y generar muros)
-from tilemap import cargar_mapa_csv, generar_muros, rect_a_tiles, es_tile_transitable, TILE
+from tilemap import (
+    cargar_mapa_csv, generar_muros, rect_a_tiles, es_tile_transitable, TILE,
+    generar_objetos_desde_mapa, obtener_posiciones_restaurantes, 
+    obtener_posiciones_casas_clientes, crear_rects_colision
+)
 from settings import FPS, COLOR_FONDO
 
 # Integración de sistemas avanzados de juego
@@ -98,22 +102,30 @@ def jugar(pantalla, archivo_csv,fondo_path):
     restaurant_positions = []
     client_positions = []
     
-    # Generar 3 restaurantes en posiciones aleatorias válidas
-    for _ in range(3):  
-        try:
-            rx, ry = spawn_on_path(mapa, 32, 32, max_attempts=100)
-            restaurant_positions.append((rx, ry))
-        except ValueError:
-            pass
+    # Generar objetos desde los códigos del mapa CSV
+    objetos_mapa = generar_objetos_desde_mapa(mapa)
+    restaurant_positions = objetos_mapa["restaurants"]
+    client_positions = objetos_mapa["client_houses"]
     
-    # Generar 2 clientes alejados de los restaurantes
-    for _ in range(2):  
-        try:
-            cx, cy = spawn_on_path(mapa, 32, 32, max_attempts=100, 
-                                 avoid_positions=restaurant_positions, min_distance=128)
-            client_positions.append((cx, cy))
-        except ValueError:
-            pass
+    # Si no hay restaurantes o clientes en el mapa, generar algunos aleatorios como respaldo
+    if not restaurant_positions:
+        print("⚠️ No se encontraron restaurantes en el mapa, generando algunos aleatorios...")
+        for _ in range(3):  
+            try:
+                rx, ry = spawn_on_path(mapa, 32, 32, max_attempts=100)
+                restaurant_positions.append((rx, ry))
+            except ValueError:
+                pass
+    
+    if not client_positions:
+        print("⚠️ No se encontraron casas de clientes en el mapa, generando algunas aleatorias...")
+        for _ in range(2):  
+            try:
+                cx, cy = spawn_on_path(mapa, 32, 32, max_attempts=100, 
+                                     avoid_positions=restaurant_positions, min_distance=128)
+                client_positions.append((cx, cy))
+            except ValueError:
+                pass
     
     # 2. Sistema de inventario avanzado
     inventory_manager = InventoryManager()
@@ -246,17 +258,17 @@ def jugar(pantalla, archivo_csv,fondo_path):
         agujeros.draw(pantalla)
         
         # --- Resto del dibujado y actualizaciones de grupos originales ---
-        zones_group.draw(pantalla)
-        zone_coin.draw(pantalla)
-        zone_coin.update(jugador)
+        # zones_group.draw(pantalla)
+        # zone_coin.draw(pantalla)
+        # zone_coin.update(jugador)
 
-        delivery_zone_group.draw(pantalla)
-        delivery_zone_group.update(jugador)
+        # delivery_zone_group.draw(pantalla)
+        # delivery_zone_group.update(jugador)
 
-        empanada_group.draw(pantalla)
-        empanada_group.update(jugador)
-        lomito_group.draw(pantalla)
-        lomito_group.update(jugador)
+        # empanada_group.draw(pantalla)
+        # empanada_group.update(jugador)
+        # lomito_group.draw(pantalla)
+        # lomito_group.update(jugador)
 
         todos.draw(pantalla)
 

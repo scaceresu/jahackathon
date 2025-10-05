@@ -2,9 +2,19 @@
 import csv
 import os
 import pygame
+from typing import List, Tuple, Dict, Optional
 
 TILE = 16  # px por tile
 MAPS_DIR = os.path.join(os.path.dirname(__file__), "maps")  # Carpeta donde están los mapas
+
+# Configuración de códigos de tiles según el sistema Alexis
+TILE_CONFIG = {
+    "walkable": [1],
+    "collision": [0],
+    "restaurant": [2], 
+    "client_house": [3],
+    "safe_zone": [4]
+}
 
 def cargar_mapa_csv(nombre_csv):
     """
@@ -81,4 +91,149 @@ def generar_muros(mapa):
             if mapa[y][x] == 0: # Los valores 0 representan obstáculos/muros
                 rect = pygame.Rect(x * TILE, y * TILE, TILE, TILE) # en píxeles
                 muros.append(rect)
+                
     return muros
+
+
+def extraer_posiciones_por_codigo(mapa, tile_code: int) -> List[Tuple[int, int]]:
+    """
+    Extrae todas las posiciones (en píxeles) donde aparece un código de tile específico.
+    
+    Args:
+        mapa: Matriz del mapa cargada
+        tile_code: Código del tile a buscar
+        
+    Returns:
+        List[Tuple[int, int]]: Lista de posiciones (x, y) en píxeles (centro del tile)
+    """
+    positions = []
+    h = len(mapa)
+    w = len(mapa[0]) if h else 0
+    
+    for row_idx in range(h):
+        for col_idx in range(w):
+            if mapa[row_idx][col_idx] == tile_code:
+                # Coordenadas del centro del tile en píxeles
+                x = col_idx * TILE + TILE // 2
+                y = row_idx * TILE + TILE // 2
+                positions.append((x, y))
+    
+    return positions
+
+
+def obtener_posiciones_restaurantes(mapa) -> List[Tuple[int, int]]:
+    """Obtiene todas las posiciones de restaurantes (código 2)"""
+    positions = []
+    for code in TILE_CONFIG["restaurant"]:
+        positions.extend(extraer_posiciones_por_codigo(mapa, code))
+    
+    print(f"🍴 Encontradas {len(positions)} posiciones de restaurante")
+    return positions
+
+
+def obtener_posiciones_casas_clientes(mapa) -> List[Tuple[int, int]]:
+    """Obtiene todas las posiciones de casas de clientes (código 3)"""
+    positions = []
+    for code in TILE_CONFIG["client_house"]:
+        positions.extend(extraer_posiciones_por_codigo(mapa, code))
+    
+    print(f"🏠 Encontradas {len(positions)} posiciones de casas de clientes")
+    return positions
+
+
+def obtener_posiciones_zonas_seguras(mapa) -> List[Tuple[int, int]]:
+    """Obtiene todas las posiciones de zonas seguras (código 4)"""
+    positions = []
+    for code in TILE_CONFIG["safe_zone"]:
+        positions.extend(extraer_posiciones_por_codigo(mapa, code))
+    
+    print(f"🛡️ Encontradas {len(positions)} posiciones de zonas seguras")
+    return positions
+
+
+def obtener_posiciones_colision(mapa) -> List[Tuple[int, int]]:
+    """Obtiene todas las posiciones de colisión (código 0)"""
+    positions = []
+    for code in TILE_CONFIG["collision"]:
+        positions.extend(extraer_posiciones_por_codigo(mapa, code))
+    
+    print(f"🚫 Encontradas {len(positions)} posiciones de colisión")
+    return positions
+
+
+def generar_objetos_desde_mapa(mapa) -> Dict[str, List[Tuple[int, int]]]:
+    """
+    Genera todas las posiciones de objetos especiales desde el mapa.
+    
+    Args:
+        mapa: Matriz del mapa cargada
+        
+    Returns:
+        Dict con las posiciones de todos los tipos de objetos
+    """
+    objetos = {
+        "restaurants": obtener_posiciones_restaurantes(mapa),
+        "client_houses": obtener_posiciones_casas_clientes(mapa),
+        "safe_zones": obtener_posiciones_zonas_seguras(mapa),
+        "collisions": obtener_posiciones_colision(mapa)
+    }
+    
+    print(f"\n✅ Objetos generados desde mapa:")
+    for tipo, posiciones in objetos.items():
+        print(f"   - {tipo}: {len(posiciones)} objetos")
+    
+    return objetos
+
+
+def es_posicion_transitable(mapa, x: int, y: int) -> bool:
+    """
+    Verifica si una posición en píxeles es transitable
+    
+    Args:
+        mapa: Matriz del mapa
+        x, y: Coordenadas en píxeles
+        
+    Returns:
+        bool: True si es transitable
+    """
+    tile_x = int(x // TILE)
+    tile_y = int(y // TILE)
+    
+    # Verificar límites
+    if (tile_x < 0 or tile_x >= len(mapa[0]) or 
+        tile_y < 0 or tile_y >= len(mapa)):
+        return False
+    
+    tile_code = mapa[tile_y][tile_x]
+    
+    # Verificar si el código está en las listas de tiles transitables
+    walkable_codes = (TILE_CONFIG["walkable"] + 
+                     TILE_CONFIG["restaurant"] + 
+                     TILE_CONFIG["client_house"] + 
+                     TILE_CONFIG["safe_zone"])
+    
+    return tile_code in walkable_codes
+
+
+def crear_rects_colision(mapa) -> List[pygame.Rect]:
+    """
+    Crea rectángulos de pygame para todas las colisiones
+    
+    Args:
+        mapa: Matriz del mapa
+        
+    Returns:
+        List[pygame.Rect]: Lista de rectángulos de colisión
+    """
+    collision_rects = []
+    collision_positions = obtener_posiciones_colision(mapa)
+    
+    for x, y in collision_positions:
+        # Convertir de centro del tile a esquina superior izquierda
+        rect_x = x - TILE // 2
+        rect_y = y - TILE // 2
+        rect = pygame.Rect(rect_x, rect_y, TILE, TILE)
+        collision_rects.append(rect)
+    
+    print(f"🔲 Creados {len(collision_rects)} rectángulos de colisión")
+    return collision_rects
