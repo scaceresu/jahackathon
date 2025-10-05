@@ -72,16 +72,10 @@ def jugar(pantalla, archivo_csv):
     ex, ey = spawn_on_path(mapa, enemy_w, enemy_h)
     enemy = Enemy(ex, ey, horizontal=True, distancia=128,
                   anim_folder="assets/imagenes/cargreen", frame_delay=0.15, aggro_radius=350)
-    
-    ex, ey = spawn_on_path(mapa, enemy_w, enemy_h)
-    enemy1 = Enemy(ex, ey, horizontal=True, distancia=64,
-                   anim_folder="assets/imagenes/cargreen", frame_delay=0.15, aggro_radius=350)
-    
-    ex, ey = spawn_on_path(mapa, enemy_w, enemy_h)
-    enemy2 = Enemy(ex, ey, horizontal=False, distancia=64,
-                   anim_folder="assets/imagenes/cargreen", frame_delay=0.15, aggro_radius=350)
-    
-    enemigos = pygame.sprite.Group(enemy, enemy1, enemy2)
+
+    print("enemy frames:", {k: len(v) for k,v in enemy.frames.items()})
+
+    enemigos = pygame.sprite.Group(enemy)
 
     menu_hud = PlayerMenu(jugador)
 
