@@ -15,11 +15,18 @@ from tilemap import cargar_mapa_csv, generar_muros, rect_a_tiles, es_tile_transi
 from settings import FPS, COLOR_FONDO
 
 
-def spawn_on_path(mapa, sprite_width, sprite_height, max_attempts=2000):
+def spawn_on_path(mapa, sprite_width, sprite_height, max_attempts=2000, avoid_positions=None, min_distance=64):
     """
     Devuelve (x,y) en píxeles donde un sprite de tamaño sprite_width x sprite_height
     cabe y todos los tiles que ocuparía son transitables (mapa tile == 1).
     Intenta hasta max_attempts veces y lanza ValueError si no encuentra posición.
+    
+    Args:
+        mapa: matriz del mapa
+        sprite_width, sprite_height: dimensiones del sprite
+        max_attempts: máximo número de intentos
+        avoid_positions: lista de (x,y) posiciones a evitar
+        min_distance: distancia mínima en píxeles a las posiciones a evitar
     """
     h = len(mapa)
     w = len(mapa[0]) if h else 0
@@ -29,15 +36,29 @@ def spawn_on_path(mapa, sprite_width, sprite_height, max_attempts=2000):
     # límites en píxeles para topleft de la entidad
     max_x = w * TILE - sprite_width
     max_y = h * TILE - sprite_height
+    
+    if avoid_positions is None:
+        avoid_positions = []
 
     for _ in range(max_attempts):
         x = random.randint(0, max(0, max_x))
         y = random.randint(0, max(0, max_y))
         rect = pygame.Rect(x, y, sprite_width, sprite_height)
+        
         # comprobar todos los tiles que cubriría el rect
         tiles = rect_a_tiles(rect)
         if tiles and all(es_tile_transitable(mapa, tx, ty) for tx, ty in tiles):
-            return x, y
+            # Verificar distancia a posiciones a evitar
+            position_valid = True
+            for avoid_x, avoid_y in avoid_positions:
+                distance = ((x - avoid_x) ** 2 + (y - avoid_y) ** 2) ** 0.5
+                if distance < min_distance:
+                    position_valid = False
+                    break
+            
+            if position_valid:
+                return x, y
+                
     raise ValueError("No se encontró posición en camino tras many attempts")
 
 
@@ -66,14 +87,13 @@ def jugar(pantalla, archivo_csv):
     px, py = spawn_on_path(mapa, 16, 16)
     jugador = Player(px, py)
     
-    enemy_w, enemy_h = 3 * TILE, 2 * TILE  # según tu Enemy horizontal size; ajusta si difiere
+    # Tamaño del enemigo reducido al 50% (16x32.5 ≈ 16x33)
+    enemy_w, enemy_h = 16, 33  # 50% de las dimensiones originales (32x65)
     
-    
-    ex, ey = spawn_on_path(mapa, enemy_w, enemy_h)
+    # Spawn del enemigo lejos del jugador (mínimo 128 píxeles de distancia)
+    ex, ey = spawn_on_path(mapa, enemy_w, enemy_h, avoid_positions=[(px, py)], min_distance=128)
     enemy = Enemy(ex, ey, horizontal=True, distancia=128,
-                  anim_folder="assets/imagenes/cargreen", frame_delay=0.15, aggro_radius=350)
-
-    print("enemy frames:", {k: len(v) for k,v in enemy.frames.items()})
+                  anim_folder="assets/imagenes/enemy", frame_delay=0.15, aggro_radius=350)
 
     enemigos = pygame.sprite.Group(enemy)
 
