@@ -6,3 +6,4 @@ class SaveZone(pygame.sprite.Sprite):
         self.image = pygame.Surface((width, height), pygame.SRCALPHA)
         self.image.fill(color)
         self.rect = self.image.get_rect(topleft=(x, y))
+        

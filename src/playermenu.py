@@ -44,3 +44,4 @@ class PlayerMenu:
                 if self.boton_salir.collidepoint(evento.pos):
                     return True
         return False
+    
