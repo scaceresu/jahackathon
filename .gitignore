@@ -2,3 +2,11 @@ venv/
 __pycache__/
 *.pyc
 
+*.tsx
+*.tmx
+*.csv
+*.tiled-session
+*.png
+
+src/assets
+
