@@ -1,114 +1,299 @@
+# src/enemy.py
 import os
 import time
-import heapq
+import math
 import pygame
-from settings import TILE_SIZE
-# funciones del módulo tilemap que usamos:
-# cargar_mapa_csv, rect_a_tiles, es_tile_transitable
+from settings import TILE, WIDTH, HEIGHT, TILE_SIZE
+from assets import cargar_frames_spritesheet
 from tilemap import rect_a_tiles, es_tile_transitable
+import heapq
 
 class Enemy(pygame.sprite.Sprite):
-    def __init__(self, x, y, horizontal=True, distancia=128, velocidad=1,
-                 anim_folder=None, frame_delay=0.2, aggro_radius=150):
+    def __init__(self, x, y,
+                 horizontal=True,
+                 distancia=128,
+                 anim_folder="assets/imagenes/enemy",
+                 frame_delay=0.12,
+                 aggro_radius=600,
+                 velocidad=2):
+        """
+        Inicializa el enemigo con atributos necesarios para el update antiguo.
+        - x,y: posición inicial en píxeles (top-left)
+        - horizontal: si la patrulla es horizontal (True) o vertical (False)
+        - distancia: distancia de patrulla en píxeles
+        - anim_folder: carpeta donde están los spritesheets
+        - frame_delay: demora entre frames (segundos)
+        - aggro_radius: radio para empezar chase
+        - velocidad: píxeles por frame (enteros recomendados)
+        """
         super().__init__()
-        # --- Sprites / fallback visual ---
-        self.full_frames = []
-        # Carga simple de frames si existe carpeta; se deja como en tu versión vieja
-        if anim_folder:
-            frames = [pygame.image.load(os.path.join(anim_folder, f"{i}.png")).convert_alpha()
-                      for i in range(1, 7)]
-            cols, rows = (3, 2) if horizontal else (2, 3)
-            surf = pygame.Surface((TILE_SIZE * cols, TILE_SIZE * rows), pygame.SRCALPHA)
-            for idx, frame in enumerate(frames):
-                col = idx % cols
-                row = idx // cols
-                surf.blit(frame, (col * TILE_SIZE, row * TILE_SIZE))
-            self.full_frames.append(surf)
-        else:
-            surf = pygame.Surface((TILE_SIZE * 3, TILE_SIZE * 2)) if horizontal else pygame.Surface((TILE_SIZE * 2, TILE_SIZE * 3))
-            surf.fill((200, 200, 220))
-            self.full_frames.append(surf)
 
-        self.current_frame = 0
+        # --- parámetros spritesheet según tu descripción ---
+        H_FRAME_W, H_FRAME_H = 64, 32   # horizontales (5x64x32)
+        V_FRAME_W, V_FRAME_H = 32, 65   # verticales  (5x32x65)
+        FRAMES_COUNT = 5
+
+        base = anim_folder
+
+        # helpers para cargar y escalar al 50% del tamaño original
+        def load_frames_scaled_50(path, frame_w, frame_h):
+            frames = []
+            if os.path.isfile(path):
+                frames = cargar_frames_spritesheet(path, frame_w, frame_h, FRAMES_COUNT)
+            # Convertir a formato alpha y escalar al 50%
+            out = []
+            for f in frames:
+                surf = f.convert_alpha()
+                # Escalar al 50% del tamaño original
+                new_w = int(surf.get_width() * 0.5)
+                new_h = int(surf.get_height() * 0.5)
+                scaled_surf = pygame.transform.scale(surf, (new_w, new_h))
+                out.append(scaled_surf)
+            return out
+
+        # cargar animaciones esperadas escaladas al 50%
+        self.frames = {
+            "idle": load_frames_scaled_50(os.path.join(base, "idle.png"), V_FRAME_W, V_FRAME_H),  # idle usa dimensiones verticales
+            "walk_right": load_frames_scaled_50(os.path.join(base, "walk_right.png"), H_FRAME_W, H_FRAME_H),
+            "walk_left": load_frames_scaled_50(os.path.join(base, "walk_left.png"), H_FRAME_W, H_FRAME_H),
+            "walk_up": load_frames_scaled_50(os.path.join(base, "walk_up.png"), V_FRAME_W, V_FRAME_H),
+            "walk_down": load_frames_scaled_50(os.path.join(base, "walk_down.png"), V_FRAME_W, V_FRAME_H),
+        }
+
+        # Usar el tamaño de idle como tamaño base del rect de colisión (reducido para mejor jugabilidad)
+        # Área de colisión reducida al 37.5% del tamaño original para colisiones más precisas
+        self.base_width = int((V_FRAME_W if self.frames["idle"] else 32) * 0.375)
+        self.base_height = int((V_FRAME_H if self.frames["idle"] else 65) * 0.375)
+        
+        # fallback visible si faltan animaciones
+        fallback = pygame.Surface((self.base_width, self.base_height), pygame.SRCALPHA)
+        fallback.fill((255, 128, 0, 200))
+        for k in list(self.frames.keys()):
+            if not self.frames[k]:
+                self.frames[k] = [fallback]
+
+        # --- animación y estado ---
+        self.state = "patrolling"   # patrolling | chasing | returning | idle
+        self.direction = "down"     # left/right/up/down (se actualiza en update)
+        self.frame_index = 0
         self.frame_delay = frame_delay
         self.last_frame_time = time.time()
-        self.image = self.full_frames[self.current_frame]
+        self.current_frame = 0
 
-        # --- Rect y posición en float para movimiento suave ---
-        w, h = (TILE_SIZE * 3, TILE_SIZE * 2) if horizontal else (TILE_SIZE * 2, TILE_SIZE * 3)
-        self.rect = pygame.Rect(x, y, w, h)
-        self.pos = pygame.Vector2(x, y)  # posición en floats para movimiento
+        # imagen visible y rect de colisión usando dimensiones base
+        self.image = self.frames["idle"][0] if self.frames["idle"] else fallback
+        self.rect = pygame.Rect(round(x), round(y), self.base_width, self.base_height)
+
+        # --- posición como Vector2 para la lógica (coherente con tu versión antigua) ---
+        self.pos = pygame.Vector2(float(x), float(y))
+
+        
+
+        
+        # --- patrulla / IA / pathfinding ---
         self.horizontal = horizontal
-
-        # --- comportamiento / patrulla ---
-        self.velocidad = velocidad
-        self.direccion = 1
         self.distancia = distancia
-        self.patrol_origin = pygame.Vector2(x, y)
+        self.patrol_origin = pygame.Vector2(self.pos)  # origen de la patrulla (pos inicial)
+        # patrol target en píxeles (dependiendo de horizontal/vertical)
+        self.patrol_target = (self.patrol_origin + pygame.Vector2(distancia, 0)) if horizontal else (self.patrol_origin + pygame.Vector2(0, distancia))
+
+        self.direccion = 1  # 1 o -1 para invertir patrulla
+        self.velocidad = velocidad
+
+        # A* / chasing
         self.aggro_radius = aggro_radius
-        self.state = "patrolling"  # patrolling / chasing / returning
-
-        # --- pathfinding ---
-        self.path = []         # lista de tiles (tx,ty) por recorrer
-        self.waypoint = None   # coordenada pixel objetivo actual (Vector2)
+        self.path = []            # lista de tiles [(tx,ty),...]
+        self.waypoint = None      # waypoint en píxeles (Vector2) para seguir path
+        self.last_repath_time = 0.0
         self.repath_cooldown = 0.5
-        self.last_repath_time = 0
 
-    # ---------------------------
-    # MOVIMIENTO Y COLISIÓN (usa la misma regla que Player)
-    # ---------------------------
-    def intentar_mover_con_tiles(self, dx, dy, mapa):
-        """Movimiento seguro: intenta mover en X y Y por separado validando tiles."""
-        # X
-        if dx != 0:
-            nuevo = self.rect.copy()
-            nuevo.x += dx
-            tiles = rect_a_tiles(nuevo)
-            if all(es_tile_transitable(mapa, tx, ty) for tx, ty in tiles):
-                self.rect.x = nuevo.x
-                self.pos.x = self.rect.x
-            else:
-                # ajuste fino pixel a pixel
-                step = 1 if dx > 0 else -1
-                moved = 0
-                for _ in range(abs(dx)):
-                    test = self.rect.copy()
-                    test.x += step
-                    tiles = rect_a_tiles(test)
-                    if all(es_tile_transitable(mapa, tx, ty) for tx, ty in tiles):
-                        self.rect.x += step
-                        moved += step
+        # vida / estado
+        self.health = 1
+        self.alive = True
+
+        # utilidades para compatibilidad con tu update antiguo
+        # self.current_frame ya inicializado arriba
+        # self.full_frames antiguamente refería a la lista de frames actuales; mantenemos diccionario frames
+
+    # -----------------------
+    # Helpers para tiles / path
+    # -----------------------
+    def pixel_a_tile(self, px, py):
+        """Convierte píxeles (px,py) al tile (tx,ty) usando TILE global."""
+        return int(px) // TILE, int(py) // TILE
+
+    def tile_centro_a_pixel(self, tx, ty):
+        """Devuelve el centro en píxeles de un tile (tx,ty)."""
+        cx = tx * TILE + TILE // 2
+        cy = ty * TILE + TILE // 2
+        return pygame.Vector2(cx - self.rect.width//2, cy - self.rect.height//2)
+
+    # -----------------------
+    # Movimiento que acepta muros_rects
+    # -----------------------
+    def intentar_mover_con_tiles(self, vx, vy, mapa, muros_rects=None):
+        """
+        Mueve el enemigo intentado validar tiles y usando muros_rects como fallback.
+        - vx, vy: desplazamiento en píxeles (enteros)
+        - mapa: matriz mapa[y][x] (1 = transitable)
+        - muros_rects: lista opcional de pygame.Rect para comprobación rápida
+        Actualiza self.pos (Vector2) y self.rect.topleft.
+        """
+        if not self.alive:
+            return False
+
+        original_pos = pygame.Vector2(self.pos)
+        moved_successfully = False
+
+        # mover separando ejes para evitar corner-cutting
+        # eje X
+        if vx != 0:
+            sign = 1 if vx > 0 else -1
+            steps = abs(int(vx))
+            for _ in range(steps):
+                test_pos = pygame.Vector2(self.pos.x + sign, self.pos.y)
+                test_rect = pygame.Rect(round(test_pos.x), round(test_pos.y), self.rect.width, self.rect.height)
+                tiles = rect_a_tiles(test_rect)
+                if all(es_tile_transitable(mapa, tx, ty) for tx, ty in tiles):
+                    self.pos.x += sign
+                    moved_successfully = True
+                else:
+                    # fallback: si muros_rects está dado, aceptar si no colisiona con ellos
+                    if muros_rects and not any(test_rect.colliderect(m) for m in muros_rects):
+                        self.pos.x += sign
+                        moved_successfully = True
                     else:
                         break
-                self.pos.x = self.rect.x
 
-        # Y
-        if dy != 0:
-            nuevo = self.rect.copy()
-            nuevo.y += dy
-            tiles = rect_a_tiles(nuevo)
-            if all(es_tile_transitable(mapa, tx, ty) for tx, ty in tiles):
-                self.rect.y = nuevo.y
-                self.pos.y = self.rect.y
-            else:
-                step = 1 if dy > 0 else -1
-                moved = 0
-                for _ in range(abs(dy)):
-                    test = self.rect.copy()
-                    test.y += step
-                    tiles = rect_a_tiles(test)
-                    if all(es_tile_transitable(mapa, tx, ty) for tx, ty in tiles):
-                        self.rect.y += step
-                        moved += step
+        # eje Y
+        if vy != 0:
+            sign = 1 if vy > 0 else -1
+            steps = abs(int(vy))
+            for _ in range(steps):
+                test_pos = pygame.Vector2(self.pos.x, self.pos.y + sign)
+                test_rect = pygame.Rect(round(test_pos.x), round(test_pos.y), self.rect.width, self.rect.height)
+                tiles = rect_a_tiles(test_rect)
+                if all(es_tile_transitable(mapa, tx, ty) for tx, ty in tiles):
+                    self.pos.y += sign
+                    moved_successfully = True
+                else:
+                    if muros_rects and not any(test_rect.colliderect(m) for m in muros_rects):
+                        self.pos.y += sign
+                        moved_successfully = True
                     else:
                         break
-                self.pos.y = self.rect.y
+
+        # sincronizar rect con pos
+        self.rect.topleft = (round(self.pos.x), round(self.pos.y))
+        
+        # Detectar si está atascado (no se movió nada)
+        if not moved_successfully and (vx != 0 or vy != 0):
+            # Activar comportamiento de desatascarse
+            if not hasattr(self, 'stuck_counter'):
+                self.stuck_counter = 0
+            self.stuck_counter += 1
+            
+            # Si está atascado por varios frames, cambiar dirección
+            if self.stuck_counter > 5:
+                self.handle_stuck_situation(mapa, muros_rects)
+                self.stuck_counter = 0
+        else:
+            # Se movió exitosamente, resetear contador
+            if hasattr(self, 'stuck_counter'):
+                self.stuck_counter = 0
+                
+        return moved_successfully
+
+    def handle_stuck_situation(self, mapa, muros_rects=None):
+        """
+        Maneja la situación cuando el enemigo está atascado contra una pared.
+        Intenta moverse en direcciones alternativas para desatascarse.
+        """
+        import random
+        
+        # Direcciones posibles para desatascarse
+        directions = [
+            (0, -self.velocidad),   # arriba
+            (0, self.velocidad),    # abajo
+            (-self.velocidad, 0),   # izquierda
+            (self.velocidad, 0),    # derecha
+            (-self.velocidad, -self.velocidad),  # diagonal arriba-izquierda
+            (self.velocidad, -self.velocidad),   # diagonal arriba-derecha
+            (-self.velocidad, self.velocidad),   # diagonal abajo-izquierda
+            (self.velocidad, self.velocidad),    # diagonal abajo-derecha
+        ]
+        
+        # Probar direcciones en orden aleatorio
+        random.shuffle(directions)
+        
+        for dx, dy in directions:
+            test_pos = pygame.Vector2(self.pos.x + dx, self.pos.y + dy)
+            test_rect = pygame.Rect(round(test_pos.x), round(test_pos.y), self.rect.width, self.rect.height)
+            tiles = rect_a_tiles(test_rect)
+            
+            # Verificar si esta dirección es válida
+            if all(es_tile_transitable(mapa, tx, ty) for tx, ty in tiles):
+                # Mover en esta dirección para desatascarse
+                self.pos.x += dx
+                self.pos.y += dy
+                self.rect.topleft = (round(self.pos.x), round(self.pos.y))
+                
+                # Resetear el path para recalcular ruta
+                self.path = []
+                self.waypoint = None
+                break
+            elif muros_rects and not any(test_rect.colliderect(m) for m in muros_rects):
+                # Si no colisiona con muros_rects, también es válido
+                self.pos.x += dx
+                self.pos.y += dy
+                self.rect.topleft = (round(self.pos.x), round(self.pos.y))
+                self.path = []
+                self.waypoint = None
+                break
+
+    # -----------------------
+    # Animación auxiliar (útil si tu update usa time.time())
+    # -----------------------
+    def advance_frame_time(self):
+        """Avanza current_frame basado en time.time() y actualiza self.image según dirección."""
+        if time.time() - getattr(self, "last_frame_time", 0) > getattr(self, "frame_delay", 0.12):
+            key = "idle"
+            if self.direction in ("left", "right"):
+                key = f"walk_{self.direction}"
+            elif self.direction in ("up", "down"):
+                key = f"walk_{self.direction}"
+            frames = self.frames.get(key) or self.frames.get("idle")
+            self.current_frame = (getattr(self, "current_frame", 0) + 1) % len(frames)
+            self.image = frames[self.current_frame]
+            self.last_frame_time = time.time()
+
+    # -----------------------
+    # (Opcional) método sencillo para setear frames compartidos desde fuera
+    # -----------------------
+    def set_shared_frames(self, frames_dict):
+        """
+        Permite inyectar un diccionario frames compartido (para ahorrar memoria).
+        frames_dict debe tener mismas keys que self.frames.
+        """
+        for k in frames_dict:
+            if k in self.frames and frames_dict[k]:
+                self.frames[k] = frames_dict[k]
+        # actualizar imagen actual por si cambia
+        key = "idle"
+        if self.direction in ("left", "right"):
+            key = f"walk_{self.direction}"
+        elif self.direction in ("up", "down"):
+            key = f"walk_{self.direction}"
+        self.image = self.frames.get(key, self.frames["idle"])[0]
+
+
+
 
     # ---------------------------
-    # UTIL: A* PATHFINDING SOBRE LA GRID DE TILES (4-vecinos)
+    # UTIL: DIJKSTRA PATHFINDING SOBRE LA GRID DE TILES (4-vecinos)
     # ---------------------------
-    def a_star(self, mapa, start, goal):
-        """Devuelve lista de (tx,ty) desde start hasta goal o [] si no hay camino."""
+    def dijkstra(self, mapa, start, goal):
+        """Devuelve lista de (tx,ty) desde start hasta goal usando algoritmo de Dijkstra."""
         h = len(mapa)
         w = len(mapa[0]) if h else 0
 
@@ -118,16 +303,21 @@ class Enemy(pygame.sprite.Sprite):
                 if 0 <= ny < h and 0 <= nx < w and es_tile_transitable(mapa, nx, ny):
                     yield (nx, ny)
 
-        def heur(a, b):
-            return abs(a[0]-b[0]) + abs(a[1]-b[1])
-
+        # Dijkstra: usar solo distancia acumulada, sin heurística
         open_heap = []
-        heapq.heappush(open_heap, (0 + heur(start, goal), 0, start))
+        heapq.heappush(open_heap, (0, start))
         came_from = {start: None}
-        gscore = {start: 0}
+        distance = {start: 0}
+        visited = set()
 
         while open_heap:
-            _, g, current = heapq.heappop(open_heap)
+            current_dist, current = heapq.heappop(open_heap)
+            
+            if current in visited:
+                continue
+            
+            visited.add(current)
+            
             if current == goal:
                 # reconstruir path
                 path = []
@@ -136,14 +326,39 @@ class Enemy(pygame.sprite.Sprite):
                     path.append(n)
                     n = came_from[n]
                 return list(reversed(path))
-            for nb in vecinos(current):
-                tentative_g = g + 1
-                if nb not in gscore or tentative_g < gscore[nb]:
-                    gscore[nb] = tentative_g
-                    f = tentative_g + heur(nb, goal)
-                    heapq.heappush(open_heap, (f, tentative_g, nb))
-                    came_from[nb] = current
+                
+            for neighbor in vecinos(current):
+                if neighbor in visited:
+                    continue
+                    
+                new_distance = current_dist + 1
+                
+                if neighbor not in distance or new_distance < distance[neighbor]:
+                    distance[neighbor] = new_distance
+                    came_from[neighbor] = current
+                    heapq.heappush(open_heap, (new_distance, neighbor))
+        
         return []
+
+    # ---------------------------
+    # MOVIMIENTO ALEATORIO
+    # ---------------------------
+    def get_random_target(self, mapa):
+        """Obtiene un tile aleatorio válido para moverse."""
+        import random
+        h = len(mapa)
+        w = len(mapa[0]) if h else 0
+        
+        # Intentar encontrar un tile válido hasta 20 veces
+        for _ in range(20):
+            x = random.randint(0, w - 1)
+            y = random.randint(0, h - 1)
+            if es_tile_transitable(mapa, x, y):
+                return (x, y)
+        
+        # Si no encuentra, usar posición actual
+        current_tile = self.pixel_a_tile(self.rect.centerx, self.rect.centery)
+        return current_tile
 
     # ---------------------------
     # HELPERS: conversión tile <-> pixel
@@ -160,97 +375,177 @@ class Enemy(pygame.sprite.Sprite):
     # ---------------------------
     # UPDATE PRINCIPAL
     # ---------------------------
-    def update(self, jugador=None, mapa=None):
-        """Mapa debe ser la matriz mapa[y][x] cargada desde CSV (1 = camino)."""
+    def update(self, jugador=None, mapa=None, muros_rects=None):
+        """
+        Actualización del enemigo con:
+        - Detección del jugador a 600 píxeles de distancia (triplicado)
+        - Seguimiento usando algoritmo de Dijkstra
+        - Movimiento aleatorio cuando no detecta al jugador
+        - Sistema de desatascamiento cuando choca con paredes
+        """
+        if not self.alive or not mapa:
+            return
+            
         ahora = time.time()
-
-        # --- estado de aggro básico ---
+        
+        # Detección del jugador a 200 píxeles
+        player_detected = False
         if jugador:
             jugador_pos = pygame.Vector2(jugador.rect.center)
-            dist = (jugador_pos - self.pos).length()
-            if dist <= self.aggro_radius:
-                # si el jugador está en rango, intentar perseguir (chase)
-                # recalcular ruta periódicamente (cooldown)
-                if ahora - self.last_repath_time > self.repath_cooldown:
+            enemy_pos = pygame.Vector2(self.rect.center)
+            dist = (jugador_pos - enemy_pos).length()
+            
+            if dist <= 600:  # Distancia de detección de 600 píxeles (triplicada)
+                player_detected = True
+                
+                # Recalcular ruta cada 0.5 segundos
+                if ahora - getattr(self, "last_repath_time", 0) > 0.5:
                     start_tile = self.pixel_a_tile(self.rect.centerx, self.rect.centery)
                     goal_tile = self.pixel_a_tile(jugador.rect.centerx, jugador.rect.centery)
-                    # si goal o start no son transitables devolvemos path vacío
-                    if mapa and es_tile_transitable(mapa, *start_tile) and es_tile_transitable(mapa, *goal_tile):
-                        self.path = self.a_star(mapa, start_tile, goal_tile)
-                        # convertir primer waypoint a pixel
+                    
+                    if es_tile_transitable(mapa, *start_tile) and es_tile_transitable(mapa, *goal_tile):
+                        try:
+                            # Usar Dijkstra para encontrar el camino
+                            self.path = self.dijkstra(mapa, start_tile, goal_tile) or []
+                        except Exception:
+                            self.path = []
+                        
+                        # Establecer el primer waypoint
                         if len(self.path) > 1:
-                            # la primera tile de path probablemente sea la tile actual; nos movemos a la siguiente
-                            next_tile = self.path[1]
-                        elif len(self.path) == 1:
-                            next_tile = self.path[0]
+                            next_tile = self.path[1]  # El primer elemento es la posición actual
+                            self.waypoint = self.tile_centro_a_pixel(*next_tile)
                         else:
-                            next_tile = None
-                        self.waypoint = self.tile_centro_a_pixel(*next_tile) if next_tile else None
+                            self.waypoint = None
+                            
+                        self.state = "chasing"
                     else:
                         self.path = []
                         self.waypoint = None
+                        
                     self.last_repath_time = ahora
-                    self.state = "chasing" if self.path else self.state
-
-        # --- comportamiento según estado ---
-        if self.state == "patrolling" or not mapa:
-            # patrulla simple en píxeles (igual a versión vieja), pero sin atravesar tiles
-            if self.horizontal:
-                vx = self.velocidad * self.direccion
-                vy = 0
-                self.intentar_mover_con_tiles(vx, vy, mapa or [[0]])
-                if abs(self.pos.x - self.patrol_origin.x) >= self.distancia:
-                    self.direccion *= -1
-            else:
-                vx = 0
-                vy = self.velocidad * self.direccion
-                self.intentar_mover_con_tiles(vx, vy, mapa or [[0]])
-                if abs(self.pos.y - self.patrol_origin.y) >= self.distancia:
-                    self.direccion *= -1
-
-        elif self.state == "chasing":
-            # seguir la ruta generada por A*; si no hay path, tratar de moverse en dirección directa validando tiles
+        
+        # Comportamiento basado en detección del jugador
+        if player_detected and self.state == "chasing":
+            # Seguir la ruta calculada por Dijkstra
             if self.path and self.waypoint:
-                target = self.waypoint
-                vec = target - self.pos
-                if vec.length() < 1:
-                    # avanzar al siguiente tile en la ruta
+                target = pygame.Vector2(self.waypoint)
+                vec = target - pygame.Vector2(self.rect.center)
+                
+                if vec.length() < 5:  # Llegó al waypoint actual
+                    # Avanzar al siguiente waypoint
                     if len(self.path) > 1:
-                        self.path.pop(0)
-                        next_tile = self.path[1] if len(self.path) > 1 else self.path[0]
-                        self.waypoint = self.tile_centro_a_pixel(*next_tile)
+                        self.path.pop(0)  # Eliminar el waypoint alcanzado
+                        if len(self.path) > 0:
+                            next_tile = self.path[0]
+                            self.waypoint = self.tile_centro_a_pixel(*next_tile)
+                        else:
+                            self.waypoint = None
                     else:
-                        # alcanzó objetivo de path
+                        # Llegó al objetivo
                         self.path = []
                         self.waypoint = None
                 else:
-                    move = vec.normalize() * self.velocidad
-                    # limitar movimiento a entero de píxeles y usar checks por tiles
-                    self.intentar_mover_con_tiles(round(move.x), round(move.y), mapa)
+                    # Moverse hacia el waypoint
+                    if vec.length() > 0:
+                        move = vec.normalize() * self.velocidad
+                        self.intentar_mover_con_tiles(round(move.x), round(move.y), mapa, muros_rects)
             else:
-                # sin ruta válida: movimiento directo pero validando tiles
+                # Sin ruta válida, moverse directamente hacia el jugador
                 if jugador:
-                    dirvec = (pygame.Vector2(jugador.rect.center) - self.pos)
+                    dirvec = (pygame.Vector2(jugador.rect.center) - pygame.Vector2(self.rect.center))
                     if dirvec.length() > 0:
                         move = dirvec.normalize() * self.velocidad
-                        self.intentar_mover_con_tiles(round(move.x), round(move.y), mapa)
+                        self.intentar_mover_con_tiles(round(move.x), round(move.y), mapa, muros_rects)
+        
+        else:
+            # Movimiento aleatorio cuando no detecta al jugador
+            if not hasattr(self, 'random_target') or not hasattr(self, 'last_random_time'):
+                self.random_target = None
+                self.last_random_time = 0
+            
+            # Cambiar objetivo aleatorio cada 3 segundos
+            if ahora - self.last_random_time > 3.0 or not self.random_target:
+                self.random_target = self.get_random_target(mapa)
+                self.last_random_time = ahora
+                
+                # Calcular ruta hacia el objetivo aleatorio
+                if self.random_target:
+                    start_tile = self.pixel_a_tile(self.rect.centerx, self.rect.centery)
+                    try:
+                        self.path = self.dijkstra(mapa, start_tile, self.random_target) or []
+                        if len(self.path) > 1:
+                            next_tile = self.path[1]
+                            self.waypoint = self.tile_centro_a_pixel(*next_tile)
+                        else:
+                            self.waypoint = None
+                    except Exception:
+                        self.path = []
+                        self.waypoint = None
+            
+            # Seguir la ruta hacia el objetivo aleatorio
+            if self.path and self.waypoint:
+                target = pygame.Vector2(self.waypoint)
+                vec = target - pygame.Vector2(self.rect.center)
+                
+                if vec.length() < 5:  # Llegó al waypoint
+                    if len(self.path) > 1:
+                        self.path.pop(0)
+                        if len(self.path) > 0:
+                            next_tile = self.path[0]
+                            self.waypoint = self.tile_centro_a_pixel(*next_tile)
+                        else:
+                            self.waypoint = None
+                    else:
+                        # Llegó al objetivo aleatorio
+                        self.path = []
+                        self.waypoint = None
+                        self.random_target = None  # Forzar nuevo objetivo
                 else:
-                    self.state = "returning"
+                    # Moverse hacia el waypoint
+                    if vec.length() > 0:
+                        move = vec.normalize() * self.velocidad
+                        self.intentar_mover_con_tiles(round(move.x), round(move.y), mapa, muros_rects)
 
-        elif self.state == "returning":
-            # volver al origen de patrulla
-            to_origin = self.patrol_origin - self.pos
-            if to_origin.length() > 1:
-                move = to_origin.normalize() * self.velocidad
-                self.intentar_mover_con_tiles(round(move.x), round(move.y), mapa)
-            else:
-                self.state = "patrolling"
-
-        # --- actualizar rect a partir de self.pos ---
+        # ---------------- sincronizar self.pos y self.rect ----------------
+        # tu implementación antigua mantenía self.pos como Vector2; actualizar rect desde pos
         self.rect.topleft = (round(self.pos.x), round(self.pos.y))
 
-        # --- animación (igual que antes) ---
-        if time.time() - self.last_frame_time > self.frame_delay:
-            self.current_frame = (self.current_frame + 1) % len(self.full_frames)
-            self.image = self.full_frames[self.current_frame]
-            self.last_frame_time = time.time()
+        # ---------------- actualizar dirección/estado para animación ----------------
+        # Determinar dirección basada en el waypoint actual o el objetivo
+        movement_vec = pygame.Vector2(0, 0)
+        
+        if hasattr(self, 'waypoint') and self.waypoint:
+            movement_vec = (pygame.Vector2(self.waypoint) - pygame.Vector2(self.rect.center))
+        elif hasattr(self, 'path') and self.path and len(self.path) > 0:
+            # mirar hacia el siguiente tile si existe
+            next_tile = self.path[0]
+            if next_tile:
+                tgt = self.tile_centro_a_pixel(*next_tile)
+                movement_vec = tgt - pygame.Vector2(self.rect.center)
+
+        # Actualizar dirección basada en el movimiento
+        if movement_vec.length() > 1:
+            dx, dy = movement_vec.x, movement_vec.y
+            if abs(dx) >= abs(dy):
+                self.direction = "right" if dx > 0 else "left"
+            else:
+                self.direction = "down" if dy > 0 else "up"
+        # Si no hay movimiento, mantener dirección actual
+
+        # ---------------- animación usando time.time() como antes ----------------
+        if time.time() - getattr(self, "last_frame_time", 0) > getattr(self, "frame_delay", 0.12):
+            # seleccionar la lista de frames adecuada segun direction y si es horiz/vert
+            key = "idle"
+            if self.direction in ("left", "right"):
+                key = f"walk_{self.direction}"
+            elif self.direction in ("up", "down"):
+                key = f"walk_{self.direction}"
+            # full_frames en tu clase antigua era la lista completa; aquí usamos self.frames dict
+            frames = self.frames.get(key) or self.frames.get("idle")
+            
+            # Verificar que frames no sea None o vacío
+            if frames and len(frames) > 0:
+                # actualizar current frame (mantengo current_frame nombre antiguo)
+                self.current_frame = (getattr(self, "current_frame", 0) + 1) % len(frames)
+                self.image = frames[self.current_frame]
+                self.last_frame_time = time.time()

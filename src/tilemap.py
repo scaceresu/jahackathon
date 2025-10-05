@@ -62,24 +62,23 @@ def rect_a_tiles(rect: pygame.Rect):
     return [(tx, ty) for ty in range(ty1, ty2 + 1) for tx in range(tx1, tx2 + 1)]
 
 def es_tile_transitable(mapa, tx, ty):
-    """True si el tile (tx,ty) está dentro del mapa y su valor es 1."""
+    """True si el tile (tx,ty) está dentro del mapa y su valor es 1 (camino transitable). Los valores 0 representan obstáculos."""
     if ty < 0 or ty >= len(mapa) or tx < 0 or tx >= len(mapa[0]):
         return False
     return mapa[ty][tx] == 1
 
 def generar_muros(mapa):
     """
-    Agrupa tiles != 1 en rects horizontales por fila para reducir checks de colisión.
+    Agrupa tiles == 0 (obstáculos/muros) en rects horizontales por fila para reducir checks de colisión.
     Devuelve lista de pygame.Rect en coordenadas en píxeles.
     """
     muros = []
     h = len(mapa) # alto del mapa en tiles
     w = len(mapa[0]) if h else 0 # ancho del mapa en tiles
-    # aca se crea una matriz de visitados
     # recorrer filas
     for y in range(h):
         for x in range(w):
-            if mapa[y][x] != 1: #
+            if mapa[y][x] == 0: # Los valores 0 representan obstáculos/muros
                 rect = pygame.Rect(x * TILE, y * TILE, TILE, TILE) # en píxeles
                 muros.append(rect)
     return muros
