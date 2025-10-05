@@ -9,7 +9,6 @@ from enemy import Enemy
 from playermenu import PlayerMenu
 from savezone import SaveZone
 from coin import Coin
-from food import FoodZone
 from deliveryzone import DeliveryZone
 # Nuevo: funciones del módulo tilemap (cargar CSV y generar muros)
 from tilemap import (
@@ -23,7 +22,6 @@ from settings import FPS, COLOR_FONDO
 from games_systems import (
     InventoryManager, 
     FoodSystem, 
-    CSVMapper, 
     DeliverySystem
 )
 
@@ -106,6 +104,7 @@ def jugar(pantalla, archivo_csv,fondo_path):
     objetos_mapa = generar_objetos_desde_mapa(mapa)
     restaurant_positions = objetos_mapa["restaurants"]
     client_positions = objetos_mapa["client_houses"]
+    food_generator_positions = objetos_mapa["safe_zones"]  # Código 4 = generadores de comida
     
     # Si no hay restaurantes o clientes en el mapa, generar algunos aleatorios como respaldo
     if not restaurant_positions:
@@ -127,11 +126,21 @@ def jugar(pantalla, archivo_csv,fondo_path):
             except ValueError:
                 pass
     
+    if not food_generator_positions:
+        print("⚠️ No se encontraron generadores de comida (código 4) en el mapa, generando algunos aleatorios...")
+        for _ in range(2):  
+            try:
+                fx, fy = spawn_on_path(mapa, 32, 32, max_attempts=100, 
+                                     avoid_positions=restaurant_positions + client_positions, min_distance=128)
+                food_generator_positions.append((fx, fy))
+            except ValueError:
+                pass
+    
     # 2. Sistema de inventario avanzado
     inventory_manager = InventoryManager()
     
-    # 3. Sistema de comida avanzado
-    food_system = FoodSystem(restaurant_positions, max_food_items=8)
+    # 3. Sistema de comida avanzado - usar solo posiciones del código 4
+    food_system = FoodSystem(food_generator_positions, max_food_items=8)
     
     # 4. Sistema de entregas avanzado  
     delivery_system = DeliverySystem()
@@ -173,7 +182,9 @@ def jugar(pantalla, archivo_csv,fondo_path):
 
     enemigos = pygame.sprite.Group(enemy)
     menu_hud = PlayerMenu(jugador)
-    menu_hud.order_system = order_system  # Conectar sistema de pedidos al HUD
+    
+    # Conectar sistema de pedidos al HUD dinámicamente
+    setattr(menu_hud, 'order_system', order_system)
 
     # --- ZONAS TRADICIONALES (mantenidas por compatibilidad) ---
     save_zone = SaveZone(500, 400, 100, 100)
@@ -181,28 +192,35 @@ def jugar(pantalla, archivo_csv,fondo_path):
     coin = Coin(700, 400, 20, 20)
     zone_coin = pygame.sprite.Group(coin)
     zones_group = pygame.sprite.Group(save_zone)
+    delivery_zone_group = pygame.sprite.Group(delivery_zone)
 
     todos = pygame.sprite.Group(jugador, *enemigos)
-    lomito = FoodZone(100, 200, 75, 75, "lomito", color=(255,200,0))
-    empanada = FoodZone(300, 150, 75, 75, "empanada", color=(200,150,50))
-    lomito_group = pygame.sprite.Group(lomito)
-    empanada_group = pygame.sprite.Group(empanada)
-    delivery_zone_group = pygame.sprite.Group(delivery_zone)
     
     # --- CONFIGURAR SISTEMAS AVANZADOS ---
-    # Crear zonas de comida en las posiciones de restaurantes  
-    for i, (rx, ry) in enumerate(restaurant_positions):
-        food_system.add_food_zone(rx-25, ry-25, 50, 50, "empanada", give_time=2.0)
+    # Crear UN SOLO generador de comida en las posiciones del código 4 (safe_zone)
+    food_types = ["empanada", "lomito", "ron", "tabaco", "miel"]
+    for i, (fx, fy) in enumerate(food_generator_positions):
+        food_type = food_types[i % len(food_types)]  # Alternar tipos de comida
+        food_system.add_food_zone(fx-25, fy-25, 50, 50, food_type, give_time=2.0)
+        print(f"�️ Generador de comida {i+1}: {food_type} en posición ({fx}, {fy})")
     
     # Crear zonas de entrega para clientes
     for i, (cx, cy) in enumerate(client_positions):
         delivery_system.add_delivery_zone(cx-25, cy-25, 50, 50, f"cliente_{i}")
     
-    # Generar comida inicial en los restaurantes
-    for _ in range(3):
+    # Generar comida inicial solo en los generadores (posiciones código 4)
+    for i in range(len(food_generator_positions) * 2):
         food_system.spawn_food_item()
     
-    print(f"✅ Sistemas inicializados: {len(restaurant_positions)} restaurantes, {len(client_positions)} clientes")
+    # Forzar spawn de comida en posiciones específicas de generadores
+    for fx, fy in food_generator_positions:
+        food_system.spawn_food_item(force_position=(fx, fy))
+    
+    print(f"✅ Sistemas inicializados:")
+    print(f"   �️ {len(food_generator_positions)} generadores de comida (código 4): {food_generator_positions}")
+    print(f"   �🍴 {len(restaurant_positions)} restaurantes: {restaurant_positions}")
+    print(f"   🏠 {len(client_positions)} clientes: {client_positions}")
+    print(f"   � {len(food_system.food_items)} items de comida generados inicialmente")
 
     boton_salir = pygame.Rect(650, 20, 120, 40)
 
@@ -231,6 +249,16 @@ def jugar(pantalla, archivo_csv,fondo_path):
         delivery_system.update(jugador)  # Actualizar sistema de entregas
         order_system.update(pygame.time.get_ticks())  # Actualizar sistema de pedidos
         
+        # --- Asegurar que siempre haya comida en los generadores (código 4) ---
+        # Intentar generar comida cada cierto tiempo si hay pocos items
+        if len(food_system.food_items) < len(food_generator_positions) and pygame.time.get_ticks() % 2000 < 50:
+            for fx, fy in food_generator_positions:
+                # Verificar si hay poca comida cerca de este generador
+                nearby_food = [item for item in food_system.food_items 
+                             if abs(item.rect.centerx - fx) < 64 and abs(item.rect.centery - fy) < 64]
+                if len(nearby_food) < 1:  # Si hay menos de 1 comida cerca
+                    food_system.spawn_food_item(force_position=(fx + random.randint(-32, 32), fy + random.randint(-32, 32)))
+        
         # --- Verificar completado de pedidos ---
         if teclas[pygame.K_SPACE]:  # Presionar espacio para entregar
             order_system.try_complete_order_at_position(
@@ -253,6 +281,15 @@ def jugar(pantalla, archivo_csv,fondo_path):
         food_system.draw(pantalla)  # Dibujar items y zonas de comida  
         delivery_system.draw(pantalla)  # Dibujar zonas de entrega
         order_system.draw_orders_on_map(pantalla)  # Dibujar pedidos activos
+        
+        # --- Dibujar indicadores de generadores de comida ---
+        for i, (fx, fy) in enumerate(food_generator_positions):
+            # Dibujar un círculo para marcar el generador de comida
+            pygame.draw.circle(pantalla, (0, 255, 0), (fx, fy), 30, 4)  # Círculo verde más grande
+            # Dibujar texto "F" para food generator
+            fuente_pequeña = pygame.font.Font(None, 24)
+            texto_f = fuente_pequeña.render("F", True, (0, 255, 0))
+            pantalla.blit(texto_f, (fx-8, fy-12))
         
         # --- Dibujar agujeros decorativos ---
         agujeros.draw(pantalla)
