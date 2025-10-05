@@ -5,6 +5,7 @@ import sys
 import random # para posiciones aleatorias de enemigos
 from player import Player
 from enemy import Enemy
+# from agujero import Agujero  # Comentado temporalmente
 from playermenu import PlayerMenu
 from savezone import SaveZone
 from coin import Coin
@@ -136,6 +137,16 @@ def jugar(pantalla, archivo_csv,fondo_path):
     px, py = spawn_on_path(mapa, 12, 24)  # Usar dimensiones de colisión del jugador
     jugador = Player(px, py)
     
+    # Agregar algunos agujeros decorativos al mapa (comentado temporalmente)
+    agujeros = pygame.sprite.Group()
+    # for _ in range(3):  # Crear 3 agujeros aleatorios
+    #     try:
+    #         ax, ay = spawn_on_path(mapa, 8, 8, max_attempts=50)
+    #         agujero = Agujero(ax, ay)
+    #         agujeros.add(agujero)
+    #     except ValueError:
+    #         pass  # Si no se puede colocar, continuar
+    
     # Inicializar inventario del jugador
     inventory_manager.initialize_player_inventory(jugador)
     
@@ -230,6 +241,9 @@ def jugar(pantalla, archivo_csv,fondo_path):
         food_system.draw(pantalla)  # Dibujar items y zonas de comida  
         delivery_system.draw(pantalla)  # Dibujar zonas de entrega
         order_system.draw_orders_on_map(pantalla)  # Dibujar pedidos activos
+        
+        # --- Dibujar agujeros decorativos ---
+        agujeros.draw(pantalla)
         
         # --- Resto del dibujado y actualizaciones de grupos originales ---
         zones_group.draw(pantalla)
