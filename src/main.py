@@ -5,8 +5,8 @@ from settings import ANCHO_PANTALLA, ALTO_PANTALLA  # Constantes de tamaño de l
 from progressmanager import cargarProgreso, guardarProgreso  # Funciones para persistir el progreso del jugador
 
 # Rutas a los archivos de mapa (JSON o formato que uses)
-# mapa1 = r"src/maps/mapa1.json"
-# mapa2 = r"src/maps/mapa1.json"            # Aquí parece un copy/paste; probablemente querías "mapa2.json"
+mapa1 = "mapa1.csv"
+mapa2 = "mapa1.csv"            # Aquí parece un copy/paste; probablemente querías "mapa2.json"
 
 def main():
     pygame.init()                          # Inicializa todos los módulos de pygame necesarios
@@ -24,7 +24,7 @@ def main():
         # Si el jugador eligió jugar el nivel 1
         if nivel == 1:
             # Ejecuta la función jugar con la pantalla y la ruta del mapa; devuelve True si el nivel fue completado
-            completado = jugar(pantalla, "mapa1.csv")
+            completado = jugar(pantalla, mapa1)
             if completado:
                 # Si se completó, desbloqueamos el siguiente nivel (al menos 2)
                 nivel_desbloqueado = max(nivel_desbloqueado, 2)
@@ -36,7 +36,7 @@ def main():
             # Verificamos si ese nivel está desbloqueado según el progreso guardado
             if nivel_desbloqueado >= 2:
                 # Ejecuta el nivel 2
-                completado = jugar(pantalla, "mapa1.csv")
+                completado = jugar(pantalla, mapa1)
                 if completado:
                     # Desbloquea el siguiente nivel (al menos 3) y guarda
                     nivel_desbloqueado = max(nivel_desbloqueado, 3)

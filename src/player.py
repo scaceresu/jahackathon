@@ -90,7 +90,7 @@ class Player(pygame.sprite.Sprite):
             else:
                 break
 
-    def update(self, teclas, mapa, muros_rects=None, enemigos=None):
+    def update(self, teclas, mapa, muros_rects=None, enemigos=None,agujeros=None):
         """Actualizar estado del jugador cada frame.
         - teclas: pygame.key.get_pressed()
         - mapa: matriz mapa[y][x] cargada desde CSV (int)
@@ -132,6 +132,11 @@ class Player(pygame.sprite.Sprite):
             print("Game Over")
             pygame.quit()
             raise SystemExit()
+        if agujeros:
+            if pygame.sprite.spritecollide(self, agujeros, False):
+                self.velocidad = 1   
+            else:
+                self.velocidad = 3   
 
     def add_item(self, item_name, amount=1):
         """Añadir item al inventario."""
