@@ -92,3 +92,6 @@ def jugar(pantalla, archivo_tmj):
 
         pygame.display.flip()
         reloj.tick(FPS)
+        
+        if jugador.coin==1:
+            return True

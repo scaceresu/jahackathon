@@ -14,3 +14,4 @@ GREEN=(0, 128, 0)
 RED=(0, 128, 0)
 SAFE_ZONE_X = (500, 600)
 SAFE_ZONE_Y = (400, 500)
+PROGRESS_FILE= "progress.json"
